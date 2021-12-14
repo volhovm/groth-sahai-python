@@ -10,7 +10,7 @@ from py_ecc.fields import (
     bls12_381_FQ12 as FQ12,
     bls12_381_FQP as FQP,
 )
-from py_ecc.bls12_381 import ( G1, G2, Z1, Z2, pairing, neg, multiply, add )
+from py_ecc.bls12_381 import ( G1, G2, Z1, Z2, pairing, neg, add )
 import py_ecc.bls12_381 as BLS
 
 P1 = Point2D[FQ]
@@ -63,7 +63,11 @@ def comAlike2(u: list[V2Elem], e: list[int]):
             return False
     return True
 
-
+def multiply(pt: Point2D[Field], n: int) -> Point2D[Field]:
+    if n < 0:
+        return neg(BLS.multiply(pt,-n))
+    else:
+        return BLS.multiply(pt,n)
 
 def buildParams(rand: list[list[list[int]]]):
     # subspaces should not be in form (0,a)? This is from CKLM
@@ -112,15 +116,94 @@ def commit(inst: Instance,
     return Com(com1,com2)
 
 
+def prove(inst: Instance,
+          params: Params,
+          com: Com,
+          x: list[P1],
+          y: list[P2],
+          rst: list[list[list[int]]]):
+
+    theta = [V1Elem([Z1,Z1]),V1Elem([Z1,Z1])]
+    phi = [V2Elem([Z2,Z2]),V2Elem([Z2,Z2])]
+
+    # theta, v1[0] and v1[1]
+    for i in range(2):
+        # T U_1
+        for vv in range(2):
+            for j in range(2):
+                theta[i].v1[vv] = add(theta[i].v1[vv], multiply(params.u1[j].v1[vv], rst[2][i][j]));
+
+        # s^T \Gamma^T \iota_1(X), only for vv = 1 because of \iota_1(X)
+        for j in range(inst.n):
+            for k in range(inst.m):
+                theta[i].v1[1] = add(theta[i].v1[1], multiply(multiply(x[k], inst.gammaT[j][k]), rst[1][j][i]));
+
+    # phi, v2[0] and v2[1]
+    for vv in range(2):
+        for i in range(2):
+            # r^T \Gamma D
+            for j in range(inst.m):
+                for k in range(inst.n):
+                    phi[i].v2[vv] = add(phi[i].v2[vv],
+                            multiply(multiply(com.com2[k].v2[vv],inst.gammaT[k][j]),rst[0][j][i]));
+
+            # -T^T U_2
+            for j in range(2):
+                phi[i].v2[vv] = add(phi[i].v2[vv], neg(multiply(params.u2[j].v2[vv], rst[2][j][i])));
+
+
+    return Proof(theta,phi)
+
+def verifyProof(inst: Instance,
+                params: Params,
+                com: Com,
+                proof: Proof):
+        if (not comAlike1(com.com1, inst.a)):
+            return False;
+        if (not comAlike2(com.com2, inst.b)):
+            return False;
+
+        p1 = []
+        p2 = []
+        for i in range(inst.m+4):
+            p1.append(Z1)
+            p2.append(Z2)
+
+        for vv1 in range(2):
+            for vv2 in range(2):
+                for i in range(inst.m):
+                    p1[i] = com.com1[i].v1[vv1];
+                    for j in range(inst.n):
+                        p2[i] = multiply(com.com2[j].v2[vv2], inst.gammaT[j][i]);
+
+                for i in range(2):
+                    p1[inst.m+i] = neg(params.u1[i].v1[vv1]);
+                    p2[inst.m+i] = proof.phi[i].v2[vv2];
+
+                for i in range(2):
+                    p1[inst.m+2+i] = proof.theta[i].v1[vv1];
+                    p2[inst.m+2+i] = neg(params.u2[i].v2[vv2]);
+
+                print("Pairing comp...")
+                pairing_v = FQ12.one();
+                for i in range(inst.m+4):
+                    pairing_v = pairing_v * pairing(p2[i],p1[i])
+
+                if pairing_v != FQ12.one():
+                    return False
+
+        return True
+
+
 ######################################################3
 
-inst = Instance(2, 2, [[1,0],[0,-1]], [-1,0], [0,-1]);
-c_x = [123, 0];
-c_y = [0, 123];
+inst = Instance(2, 2, [[1,0],[0,-1]], [-1,0], [0,-1])
+c_x = [123, 0]
+c_y = [0, 123]
 rst = [ [[1235,3462],[0,0]],
         [[0,0],[1924,6258]],
         [[8334,1953],[2342,4935]]
-      ];
+      ]
 
 params = buildParams([[[64321,83371],[12924,62558]],
                      [[83334,19553],[25342,43935]]]);
@@ -133,18 +216,5 @@ for c in c_y:
     y.append(multiply(G2,c))
 
 com = commit(inst,params,x,y,rst)
-
-print(params)
-print(com)
-
-##########################################################3
-
-
-#p = V1Elem([G1])
-#
-#print(p)
-#print(p.v1)
-#
-#p1 = pairing(G2, G1)
-#pn1 = pairing(G2, neg(G1))
-#print(p1 * pn1 == FQ12.one())
+proof = prove(inst,params,com,x,y,rst)
+print(verifyProof(inst,params,com,proof))
