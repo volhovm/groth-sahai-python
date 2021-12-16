@@ -13,6 +13,12 @@ from py_ecc.fields import (
 from py_ecc.bls12_381 import ( G1, G2, Z1, Z2, pairing, neg, add )
 import py_ecc.bls12_381 as BLS
 
+
+######################################################
+# Datatypes
+######################################################
+
+
 P1 = Point2D[FQ]
 P2 = Point2D[FQ2]
 
@@ -48,6 +54,10 @@ class Instance:
     a: list[int]
     b: list[int]
 
+
+######################################################
+# Proof creation & verification
+######################################################
 
 def comAlike1(u: list[V1Elem], e: list[int]):
     for i in range(len(e)):
@@ -131,12 +141,15 @@ def prove(inst: Instance,
         # T U_1
         for vv in range(2):
             for j in range(2):
-                theta[i].v1[vv] = add(theta[i].v1[vv], multiply(params.u1[j].v1[vv], rst[2][i][j]));
+                theta[i].v1[vv] = add(theta[i].v1[vv],
+                                      multiply(params.u1[j].v1[vv], rst[2][i][j]));
 
         # s^T \Gamma^T \iota_1(X), only for vv = 1 because of \iota_1(X)
         for j in range(inst.n):
             for k in range(inst.m):
-                theta[i].v1[1] = add(theta[i].v1[1], multiply(multiply(x[k], inst.gammaT[j][k]), rst[1][j][i]));
+                theta[i].v1[1] = add(theta[i].v1[1],
+                                     multiply(multiply(x[k], inst.gammaT[j][k]),
+                                              rst[1][j][i]));
 
     # phi, v2[0] and v2[1]
     for vv in range(2):
@@ -145,11 +158,14 @@ def prove(inst: Instance,
             for j in range(inst.m):
                 for k in range(inst.n):
                     phi[i].v2[vv] = add(phi[i].v2[vv],
-                            multiply(multiply(com.com2[k].v2[vv],inst.gammaT[k][j]),rst[0][j][i]));
+                            multiply(
+                                multiply(com.com2[k].v2[vv],inst.gammaT[k][j]),
+                                rst[0][j][i]));
 
             # -T^T U_2
             for j in range(2):
-                phi[i].v2[vv] = add(phi[i].v2[vv], neg(multiply(params.u2[j].v2[vv], rst[2][j][i])));
+                phi[i].v2[vv] = add(phi[i].v2[vv],
+                                    neg(multiply(params.u2[j].v2[vv], rst[2][j][i])));
 
 
     return Proof(theta,phi)
@@ -173,8 +189,10 @@ def verifyProof(inst: Instance,
             for vv2 in range(2):
                 for i in range(inst.m):
                     p1[i] = com.com1[i].v1[vv1];
+                    p2[i] = Z2;
                     for j in range(inst.n):
-                        p2[i] = multiply(com.com2[j].v2[vv2], inst.gammaT[j][i]);
+                        p2[i] = add(p2[i],
+                                    multiply(com.com2[j].v2[vv2], inst.gammaT[j][i]));
 
                 for i in range(2):
                     p1[inst.m+i] = neg(params.u1[i].v1[vv1]);
@@ -184,10 +202,14 @@ def verifyProof(inst: Instance,
                     p1[inst.m+2+i] = proof.theta[i].v1[vv1];
                     p2[inst.m+2+i] = neg(params.u2[i].v2[vv2]);
 
-                print("Pairing comp...")
+                print("--------- Verification, pairings %d/4" % (vv1 * 2 + vv2 + 1))
                 pairing_v = FQ12.one();
+                #pairing_v_prev = FQ12.one();
                 for i in range(inst.m+4):
                     pairing_v = pairing_v * pairing(p2[i],p1[i])
+                    #print("Pairing value after step %d/%d:" % (i+1,inst.m+4))
+                    #print("Same" if pairing_v == pairing_v_prev else pairing_v)
+                    #pairing_v_prev = pairing_v
 
                 if pairing_v != FQ12.one():
                     return False
@@ -195,18 +217,44 @@ def verifyProof(inst: Instance,
         return True
 
 
-######################################################3
+######################################################
+# Language parameters
+######################################################
 
-inst = Instance(2, 2, [[1,0],[0,-1]], [-1,0], [0,-1])
-c_x = [123, 0]
-c_y = [0, 123]
-rst = [ [[1235,3462],[0,0]],
-        [[0,0],[1924,6258]],
+
+### Toy example
+#inst = Instance(2, 2, [[1,0],[0,-1]], [-1,-1], [-1,-1])
+#c_x = [10, 2]
+#c_y = [1, 5]
+#rst = [ [[0,0],[0,0]],
+#        [[0,0],[0,0]],
+#        [[0,0],[0,0]]
+#      ]
+
+
+msg = 2123
+r = 24123
+sk = 12412
+ct = sk * r + msg
+inst = Instance(3, 3,
+                [[1,0,0],[0,-1,0],[0,0,-1]],
+                [ct,sk,-1],
+                [1,-1, 1])
+c_x = [ct,sk,msg]
+c_y = [1,r,1]
+rst = [ [[0,0],[0,0],[1235,3462]],
+        [[0,0],[1924,6258],[0,0]],
         [[8334,1953],[2342,4935]]
       ]
 
 params = buildParams([[[64321,83371],[12924,62558]],
                      [[83334,19553],[25342,43935]]]);
+
+
+
+######################################################
+# Generic evaluation
+######################################################
 
 x = []
 y = []
@@ -217,4 +265,4 @@ for c in c_y:
 
 com = commit(inst,params,x,y,rst)
 proof = prove(inst,params,com,x,y,rst)
-print(verifyProof(inst,params,com,proof))
+print("Proof verifies?: ", verifyProof(inst,params,com,proof))
