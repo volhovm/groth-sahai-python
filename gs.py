@@ -14,6 +14,12 @@ from py_ecc.bls12_381 import ( G1, G2, Z1, Z2, pairing, neg, add )
 import py_ecc.bls12_381 as BLS
 
 
+# TODO: fix notation so that it's similar to the blog post
+# TODO: add comments
+# TODO: automated tests
+# TODO: optimized curve? (maybe not)
+
+
 ######################################################
 # Datatypes
 ######################################################
@@ -50,7 +56,7 @@ class Proof:
 class Instance:
     m: int
     n: int
-    gammaT: list[list[int]]
+    gammaT: list[list[list[int]]] # List of matrices
     a: list[int]
     b: list[int]
 
@@ -133,47 +139,51 @@ def prove(inst: Instance,
           y: list[P2],
           rst: list[list[list[int]]]):
 
-    theta = [V1Elem([Z1,Z1]),V1Elem([Z1,Z1])]
-    phi = [V2Elem([Z2,Z2]),V2Elem([Z2,Z2])]
+    proofs = []
 
-    # theta, v1[0] and v1[1]
-    for i in range(2):
-        # T U_1
-        for vv in range(2):
-            for j in range(2):
-                theta[i].v1[vv] = add(theta[i].v1[vv],
-                                      multiply(params.u1[j].v1[vv], rst[2][i][j]));
+    for gamma in inst.gammaT:
+        theta = [V1Elem([Z1,Z1]),V1Elem([Z1,Z1])]
+        phi = [V2Elem([Z2,Z2]),V2Elem([Z2,Z2])]
 
-        # s^T \Gamma^T \iota_1(X), only for vv = 1 because of \iota_1(X)
-        for j in range(inst.n):
-            for k in range(inst.m):
-                theta[i].v1[1] = add(theta[i].v1[1],
-                                     multiply(multiply(x[k], inst.gammaT[j][k]),
-                                              rst[1][j][i]));
-
-    # phi, v2[0] and v2[1]
-    for vv in range(2):
+        # theta, v1[0] and v1[1]
         for i in range(2):
-            # r^T \Gamma D
-            for j in range(inst.m):
-                for k in range(inst.n):
+            # T U_1
+            for vv in range(2):
+                for j in range(2):
+                    theta[i].v1[vv] = add(theta[i].v1[vv],
+                                          multiply(params.u1[j].v1[vv], rst[2][i][j]));
+
+            # s^T \Gamma^T \iota_1(X), only for vv = 1 because of \iota_1(X)
+            for j in range(inst.n):
+                for k in range(inst.m):
+                    theta[i].v1[1] = add(theta[i].v1[1],
+                                         multiply(multiply(x[k], gamma[j][k]),
+                                                  rst[1][j][i]));
+
+        # phi, v2[0] and v2[1]
+        for vv in range(2):
+            for i in range(2):
+                # r^T \Gamma D
+                for j in range(inst.m):
+                    for k in range(inst.n):
+                        phi[i].v2[vv] = add(phi[i].v2[vv],
+                                multiply(
+                                    multiply(com.com2[k].v2[vv],gamma[k][j]),
+                                    rst[0][j][i]));
+
+                # -T^T U_2
+                for j in range(2):
                     phi[i].v2[vv] = add(phi[i].v2[vv],
-                            multiply(
-                                multiply(com.com2[k].v2[vv],inst.gammaT[k][j]),
-                                rst[0][j][i]));
+                                        neg(multiply(params.u2[j].v2[vv], rst[2][j][i])));
 
-            # -T^T U_2
-            for j in range(2):
-                phi[i].v2[vv] = add(phi[i].v2[vv],
-                                    neg(multiply(params.u2[j].v2[vv], rst[2][j][i])));
+        proofs.append(Proof(theta,phi))
 
-
-    return Proof(theta,phi)
+    return proofs
 
 def verifyProof(inst: Instance,
                 params: Params,
                 com: Com,
-                proof: Proof):
+                proofs: [Proof]):
         if (not comAlike1(com.com1, inst.a)):
             return False;
         if (not comAlike2(com.com2, inst.b)):
@@ -185,34 +195,39 @@ def verifyProof(inst: Instance,
             p1.append(Z1)
             p2.append(Z2)
 
-        for vv1 in range(2):
-            for vv2 in range(2):
-                for i in range(inst.m):
-                    p1[i] = com.com1[i].v1[vv1];
-                    p2[i] = Z2;
-                    for j in range(inst.n):
-                        p2[i] = add(p2[i],
-                                    multiply(com.com2[j].v2[vv2], inst.gammaT[j][i]));
+        for i in range(len(inst.gammaT)):
+            gammaT = inst.gammaT[i]
+            proof = proofs[i]
+            print("--------- Equation %d" % i)
 
-                for i in range(2):
-                    p1[inst.m+i] = neg(params.u1[i].v1[vv1]);
-                    p2[inst.m+i] = proof.phi[i].v2[vv2];
+            for vv1 in range(2):
+                for vv2 in range(2):
+                    for i in range(inst.m):
+                        p1[i] = com.com1[i].v1[vv1];
+                        p2[i] = Z2;
+                        for j in range(inst.n):
+                            p2[i] = add(p2[i],
+                                        multiply(com.com2[j].v2[vv2], gammaT[j][i]));
 
-                for i in range(2):
-                    p1[inst.m+2+i] = proof.theta[i].v1[vv1];
-                    p2[inst.m+2+i] = neg(params.u2[i].v2[vv2]);
+                    for i in range(2):
+                        p1[inst.m+i] = neg(params.u1[i].v1[vv1]);
+                        p2[inst.m+i] = proof.phi[i].v2[vv2];
 
-                print("--------- Verification, pairings %d/4" % (vv1 * 2 + vv2 + 1))
-                pairing_v = FQ12.one();
-                #pairing_v_prev = FQ12.one();
-                for i in range(inst.m+4):
-                    pairing_v = pairing_v * pairing(p2[i],p1[i])
-                    #print("Pairing value after step %d/%d:" % (i+1,inst.m+4))
-                    #print("Same" if pairing_v == pairing_v_prev else pairing_v)
-                    #pairing_v_prev = pairing_v
+                    for i in range(2):
+                        p1[inst.m+2+i] = proof.theta[i].v1[vv1];
+                        p2[inst.m+2+i] = neg(params.u2[i].v2[vv2]);
 
-                if pairing_v != FQ12.one():
-                    return False
+                    print("-- Verification, pairings %d/4" % (vv1 * 2 + vv2 + 1))
+                    pairing_v = FQ12.one();
+                    #pairing_v_prev = FQ12.one();
+                    for i in range(inst.m+4):
+                        pairing_v = pairing_v * pairing(p2[i],p1[i])
+                        #print("Pairing value after step %d/%d:" % (i+1,inst.m+4))
+                        #print("Same" if pairing_v == pairing_v_prev else pairing_v)
+                        #pairing_v_prev = pairing_v
+
+                    if pairing_v != FQ12.one():
+                        return False
 
         return True
 
@@ -232,25 +247,58 @@ def verifyProof(inst: Instance,
 #      ]
 
 
-msg = 2123
-r = 24123
-sk = 12412
-ct = sk * r + msg
-inst = Instance(3, 3,
-                [[1,0,0],[0,-1,0],[0,0,-1]],
-                [ct,sk,-1],
-                [1,-1, 1])
-c_x = [ct,sk,msg]
-c_y = [1,r,1]
-rst = [ [[0,0],[0,0],[1235,3462]],
-        [[0,0],[1924,6258],[0,0]],
-        [[8334,1953],[2342,4935]]
-      ]
+# # Toy example 2
+# msg = 2123
+# r = 24123
+# sk = 12412
+# ct = sk * r + msg
+# inst = Instance(3, 3,
+#                 [[1,0,0],[0,-1,0],[0,0,-1]],
+#                 [ct,sk,-1],
+#                 [1,-1, 1])
+# c_x = [ct,sk,msg]
+# c_y = [1,r,1]
+# rst = [ [[0,0],[0,0],[1235,3462]],
+#         [[0,0],[1924,6258],[0,0]],
+#         [[8334,1953],[2342,4935]]
+#       ]
+#
+# params = buildParams([[[64321,83371],[12924,62558]],
+#                      [[83334,19553],[25342,43935]]]);
+
+
+msg = 12312435
+r = 14352345
+sk = 36534152
+ct1 = r
+ct2 = sk * r + msg
+w1 = r
+w2 = msg
+w3 = msg
+
+c_x = [w2, ct1, ct2, sk, 1]
+r = [[1231,5432],[0,0],[0,0],[0,0],[0,0]]
+a = [-1, ct1, ct2, sk, 1]
+
+c_y = [w1, w3, 1]
+s = [[4214,4653],[1924,6258],[0,0]]
+b = [-1, -1, 1]
+
+t = [[8334,1953],[2342,4935]]
+rst = [r, s, t]
+
+gammaT_E1 = [[0,0,0,0,-1],[0,0,0,0,0],[0,1,0,0,0]]
+gammaT_E2 = [[0,0,0,-1,0],[0,0,0,0,0],[-1,0,1,0,0]]
+gammaT_E3 = [[0,0,0,0,0],[0,0,0,0,-1],[1,0,0,0,0]]
+gammaT_E4 = [[0,0,0,0,0],[1,0,0,0,0],[-1,0,0,0,0]]
+
+
+inst = Instance(len(c_x), len(c_y), [gammaT_E1,gammaT_E2,gammaT_E3,gammaT_E4], a, b)
+#inst = Instance(len(c_x), len(c_y), [gammaT_E4], a, b)
+
 
 params = buildParams([[[64321,83371],[12924,62558]],
                      [[83334,19553],[25342,43935]]]);
-
-
 
 ######################################################
 # Generic evaluation
