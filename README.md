@@ -9,11 +9,12 @@ This only affects the notation, as the proving system is essentially the same as
 Another useful resource for understanding GS proofs is "Groth-Sahai Proofs Revisited" [3].
 
 
-## How to run it
+## How To Run This
 
 For `nix` users, preparing the setup is easy, just run `nix-shell shell.nix`.
 Otherwise, the only non-standard library it uses is [py_ecc](https://github.com/ethereum/py_ecc) which can be installed from your package manager or from `pip`.
 
+Then, simply run `groth_sahai.py`, which contains both the library and some examples / tests.
 ```
 >>> python groth_sahai.py
 - Preparing the setup
