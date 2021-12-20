@@ -1,19 +1,3 @@
-# TODO: fix notation so that it's similar to the blog post
-#
-# Notation-wise this implementation follows the description of the
-# Groth-Sahai proof system presented in "Malleable Proof Systems and
-# Applications" by Chase et al., Appendix A.1.
-# - https://eprint.iacr.org/2012/012.pdf
-#
-# This only affects the notation, as the proving system is essentially the same
-# as in the original paper, "Efficient Non-interactive Proof Systems for
-# Bilinear Groups".
-# - https://eprint.iacr.org/2007/155.pdf
-#
-# Another useful resource for understanding GS proofs is "Groth-Sahai Proofs
-# Revisited".
-# - https://eprint.iacr.org/2009/599.pdf
-
 import random
 from typing import (Tuple)
 from dataclasses import dataclass
@@ -241,7 +225,7 @@ def verifyProof(inst: Instance,
                 com: Com,
                 proofs: [Proof]):
 
-   print("* Checking commitment consistency")
+   print(" * Checking commitment consistency")
    if (not comAlike1(com.com_c, inst.a)):
        return False;
    if (not comAlike2(com.com_d, inst.b)):
@@ -256,7 +240,7 @@ def verifyProof(inst: Instance,
    for ii in range(len(inst.gammaT)):
        gammaT = inst.gammaT[ii]
        proof = proofs[ii]
-       print("* Equation %d/%d" % (ii+1,len(inst.gammaT)))
+       print(" * Equation %d/%d" % (ii+1,len(inst.gammaT)))
 
        for vv1 in range(2):
            for vv2 in range(2):
@@ -275,12 +259,12 @@ def verifyProof(inst: Instance,
                    p1[inst.m+2+i] = proof.theta[i].v1[vv1];
                    p2[inst.m+2+i] = neg(params.u2[i].v2[vv2]);
 
-               print("** Verification, pairings %d/4" % (vv1 * 2 + vv2 + 1))
+               print(" ** Verification, pairings %d/4" % (vv1 * 2 + vv2 + 1))
                pairing_v = FQ12.one();
                #pairing_v_prev = FQ12.one();
                for i in range(inst.m+4):
                    pairing_v = pairing_v * pairing(p2[i],p1[i])
-                   #print("*** Pairing value after step %d/%d:" % (i+1,inst.m+4))
+                   #print(" *** Pairing value after step %d/%d:" % (i+1,inst.m+4))
                    #print("Same" if pairing_v == pairing_v_prev else pairing_v)
                    #pairing_v_prev = pairing_v
 
@@ -296,7 +280,7 @@ def verifyProof(inst: Instance,
 
 # Runs the evaluation / correctness check, uses global variables (defined below)
 def runEvalCheck(c_x, c_y, c_a, c_b, gammas):
-    print("Preparing the setup")
+    print("- Preparing the setup")
 
     m = len(c_x)
     n = len(c_y)
@@ -315,12 +299,12 @@ def runEvalCheck(c_x, c_y, c_a, c_b, gammas):
     inst = Instance(m, n, gammas, a, b)
 
     params = sampleParams()
-    print("Committing")
+    print("- Committing")
     com = commit(inst,params,x,y,r,s)
-    print("Creating the proof")
+    print("- Creating the proof")
     proof = prove(inst,params,com,x,y,r,s,t)
 
-    print("Verifying the proof")
+    print("- Verifying the proof")
     print("Proof verifies: ", verifyProof(inst,params,com,proof))
 
 
@@ -371,7 +355,7 @@ def testToy2():
 
 # Elgamal Proof that ciphertext encrypts 0 or 1
 def testElgamal():
-    msg = 1 # or 0
+    msg = 0 # or 0
     r = 14352345
     sk = 36534152
     ct1 = r
