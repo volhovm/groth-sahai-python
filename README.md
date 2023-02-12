@@ -1,6 +1,6 @@
 # Groth-Sahai Proof System
 
-This is an implementation of Groth-Sahai proof system, designed in particular to illustrate the language of "Knowledge of Elgamal Ciphertext that encrypts zero or one", as presented in the blog post **TODO INSERT BLOG POST**
+This is an implementation of Groth-Sahai proof system, designed in particular to illustrate the language of "Knowledge of Elgamal Ciphertext that encrypts zero or one", as presented in the blog post [[https://crypto.ethereum.org/blog/groth-sahai-blogpost]].
 
 Notation-wise the implementation follows the description of the Groth-Sahai proof system presented in "Malleable Proof Systems and Applications" by Chase et al., Appendix A.1. [1]
 
